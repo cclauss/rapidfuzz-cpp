@@ -1107,18 +1107,6 @@ void levenshtein_align_hirschberg(Editops& editops, Range<InputIt1> s1, Range<In
     }
 }
 
-template <typename InputIt1, typename InputIt2>
-Editops levenshtein_editops(Range<InputIt1> s1, Range<InputIt2> s2, int64_t score_hint)
-{
-    Editops editops;
-    if (score_hint < 31) score_hint = 31;
-
-    levenshtein_align_hirschberg(editops, s1, s2, 0, 0, 0, score_hint);
-    editops.set_src_len(static_cast<size_t>(s1.size()));
-    editops.set_dest_len(static_cast<size_t>(s2.size()));
-    return editops;
-}
-
 class Levenshtein : public DistanceBase<Levenshtein, int64_t, 0, std::numeric_limits<int64_t>::max(),
                                         LevenshteinWeightTable> {
     friend DistanceBase<Levenshtein, int64_t, 0, std::numeric_limits<int64_t>::max(), LevenshteinWeightTable>;
@@ -1137,5 +1125,32 @@ class Levenshtein : public DistanceBase<Levenshtein, int64_t, 0, std::numeric_li
         return levenshtein_distance(s1, s2, weights, score_cutoff);
     }
 };
+
+template <typename InputIt1, typename InputIt2>
+Editops levenshtein_editops(Range<InputIt1> s1, Range<InputIt2> s2, int64_t score_hint)
+{
+    Editops editops;
+    if (score_hint < 31) score_hint = 31;
+
+    int64_t score_cutoff = std::max(s1.size(), s2.size());
+    if (score_hint < score_cutoff)
+    {
+        //CachedLevenshtein scorer(s1);
+        int64_t score = Levenshtein::distance(s1, s2, {1,1,1}, score_hint);//scorer.distance(s2, score_hint);
+        while (score > score_hint)
+        {
+            score_hint *= 2;
+            score = Levenshtein::distance(s1, s2, {1,1,1}, score_hint);//scorer.distance(s2, score_hint);
+        }
+
+        score_cutoff = std::min(score_cutoff, score_hint);
+    }
+    levenshtein_align_hirschberg(editops, s1, s2, 0, 0, 0, score_cutoff);
+
+    //levenshtein_align_hirschberg(editops, s1, s2, 0, 0, 0, score_hint);
+    editops.set_src_len(static_cast<size_t>(s1.size()));
+    editops.set_dest_len(static_cast<size_t>(s2.size()));
+    return editops;
+}
 
 } // namespace rapidfuzz::detail
